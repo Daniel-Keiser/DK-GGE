@@ -4,12 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CSV Download</title>
+    <style>
+        #downloadButton:disabled {
+            background-color: gray;
+        }
+    </style>
 </head>
 <body>
-    <h1>Download SK Loot</h1>
-    <button id="downloadButton">Download</button>
+    <h1>Generate and Download CSV</h1>
+    <label for="lootLimit">Loot Limit:</label>
+    <input type="number" id="lootLimit" placeholder="Enter loot limit" value="5000000">
+    <button id="runTaskButton">Run Task</button>
+    <button id="downloadButton">Download CSV</button>
+
     <script>
-        document.getElementById('downloadButton').addEventListener('click', function() {
+        const runTaskButton = document.getElementById('runTaskButton');
+        const downloadButton = document.getElementById('downloadButton');
+        const lootLimitInput = document.getElementById('lootLimit');
+
+        runTaskButton.addEventListener('click', async function() {
+            const lootLimit = lootLimitInput.value;
+
+            if (!lootLimit) {
+                alert("Please enter a valid loot limit.");
+                return;
+            }
+
+            runTaskButton.innerText = 'Running...';
+            runTaskButton.disabled = true;
+
+            const response = await fetch(`/run-task/?loot_limit=${lootLimit}`, {
+                method: 'POST'
+            });
+
+            if (response.ok) {
+                runTaskButton.innerText = 'Run Task';
+                runTaskButton.disabled = false;
+                downloadButton.disabled = false;
+            } else {
+                alert('Failed to start task.');
+                runTaskButton.innerText = 'Run Task';
+                runTaskButton.disabled = false;
+            }
+        });
+
+        downloadButton.addEventListener('click', function() {
             window.location.href = '/download-csv/';
         });
     </script>

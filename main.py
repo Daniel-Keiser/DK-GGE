@@ -1,5 +1,5 @@
-from fastapi import FastAPI, BackgroundTasks
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, BackgroundTasks, Query
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import requests
 import pandas as pd
@@ -8,10 +8,8 @@ import os
 
 app = FastAPI()
 
-# Serve static files (like HTML, CSS, JS) from the "static" directory
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Path for the CSV file
 csv_file_path = 'static/output.csv'
 
 def fetch_data(url):
@@ -28,7 +26,7 @@ def process_data(data):
     L_array = content.get('L', [])
     results = []
     for item in L_array:
-        player_id = item[1]  # ID is the loot value
+        player_id = item[1]
         alliance_name = item[2].get('AN', '')
         loot_value = int(item[2].get('CF', 0))
         if alliance_name == 'Soft Kittens':
@@ -71,8 +69,7 @@ def fetch_data_for_looting(base_url, loot_limit, collected_data):
             print("No more data to fetch from the current index.")
             break
 
-def generate_csv():
-    loot_limit = 5000000  # Example limit
+def generate_csv(loot_limit):
     base_url = 'https://empire-api.fly.dev/EmpireEx_21/hgh/'
     all_data = []
 
@@ -80,11 +77,15 @@ def generate_csv():
     df = pd.DataFrame(all_data, columns=['Loot ID', 'Name'])
     df.to_csv(csv_file_path, index=False, sep=',', encoding='utf-8')
 
-@app.on_event("startup")
-async def startup_event():
-    # Generate the CSV file when the server starts
-    if not os.path.exists(csv_file_path):
-        generate_csv()
+@app.post("/run-task/")
+async def run_task(background_tasks: BackgroundTasks, loot_limit: int = Query(5000000, description="The loot limit value")):
+    # Remove old CSV if it exists
+    if os.path.exists(csv_file_path):
+        os.remove(csv_file_path)
+    
+    # Run the task in the background
+    background_tasks.add_task(generate_csv, loot_limit)
+    return JSONResponse({"message": f"Task started with loot limit {loot_limit}. CSV is being generated."})
 
 @app.get("/", response_class=HTMLResponse)
 async def read_index():
@@ -99,7 +100,7 @@ async def download_csv():
     if os.path.exists(csv_file_path):
         return FileResponse(csv_file_path, media_type='text/csv', filename='output.csv')
     else:
-        return {"error": "File not found"}
+        return JSONResponse({"error": "File not found"})
 
 if __name__ == "__main__":
     import uvicorn
