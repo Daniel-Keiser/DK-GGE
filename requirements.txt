@@ -1,4 +1,4 @@
-fastapi[all]
-requests==2.31.0
-pandas==1.5.3
-uvicorn==0.20.0
+fastapi
+requests
+pandas
+uvicorn
