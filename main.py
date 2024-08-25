@@ -1,10 +1,18 @@
 from fastapi import FastAPI, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import requests
 import pandas as pd
 import time
+import os
 
 app = FastAPI()
+
+# Serve static files (like HTML, CSS, JS) from the "static" directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Path for the CSV file
+csv_file_path = 'static/output.csv'
 
 def fetch_data(url):
     try:
@@ -20,7 +28,7 @@ def process_data(data):
     L_array = content.get('L', [])
     results = []
     for item in L_array:
-        player_id = item[1]
+        player_id = item[1]  # ID is the loot value
         alliance_name = item[2].get('AN', '')
         loot_value = int(item[2].get('CF', 0))
         if alliance_name == 'Soft Kittens':
@@ -63,21 +71,36 @@ def fetch_data_for_looting(base_url, loot_limit, collected_data):
             print("No more data to fetch from the current index.")
             break
 
-def generate_csv(loot_limit: int):
+def generate_csv():
+    loot_limit = 5000000  # Example limit
     base_url = 'https://empire-api.fly.dev/EmpireEx_21/hgh/'
     all_data = []
-    fetch_data_for_looting(base_url, loot_limit, all_data)
-    
-    df = pd.DataFrame(all_data, columns=['Loot ID', 'Name'])
-    df.to_csv('output.csv', index=False, sep=',', encoding='utf-8')
-    print("CSV generated successfully.")
 
-@app.get("/generate-csv/")
-async def get_csv(loot_limit: int, background_tasks: BackgroundTasks):
-    background_tasks.add_task(generate_csv, loot_limit)
-    return {"message": "CSV is being generated. Please download it shortly."}
+    fetch_data_for_looting(base_url, loot_limit, all_data)
+    df = pd.DataFrame(all_data, columns=['Loot ID', 'Name'])
+    df.to_csv(csv_file_path, index=False, sep=',', encoding='utf-8')
+
+@app.on_event("startup")
+async def startup_event():
+    # Generate the CSV file when the server starts
+    if not os.path.exists(csv_file_path):
+        generate_csv()
+
+@app.get("/", response_class=HTMLResponse)
+async def read_index():
+    file_path = "static/index.html"
+    if os.path.exists(file_path):
+        with open(file_path, "r") as file:
+            return HTMLResponse(content=file.read())
+    return HTMLResponse(content="<h1>Index file not found</h1>", status_code=404)
 
 @app.get("/download-csv/")
 async def download_csv():
-    file_path = "output.csv"
-    return FileResponse(path=file_path, filename="output.csv")
+    if os.path.exists(csv_file_path):
+        return FileResponse(csv_file_path, media_type='text/csv', filename='output.csv')
+    else:
+        return {"error": "File not found"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=80)
